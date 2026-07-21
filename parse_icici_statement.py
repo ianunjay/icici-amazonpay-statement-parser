@@ -15,6 +15,15 @@ from openpyxl.styles import (
 from openpyxl.utils import get_column_letter
 
 
+# ── configuration ────────────────────────────────────────────────────────────
+# Set the path to your ICICI Amazon Pay PDF statement here:
+PDF_PATH = "file://Users/Retail_Amazon_NORM.pdf"
+# Set the PDF password if the statement is password-protected, otherwise set to None:
+PDF_PASSWORD = "per1234"
+# Set the output Excel file path:
+OUTPUT_EXCEL_PATH = "icici_transactions.xlsx"
+
+
 # ── helpers ──────────────────────────────────────────────────────────────────
 
 DATE_RE   = re.compile(r'\b(\d{2}/\d{2}/\d{4})\b')
@@ -38,8 +47,15 @@ def categorise(description: str) -> str:
     return "Other"
 
 
-def parse_transactions(pdf_path: str) -> tuple[list[dict], dict]:
+def parse_transactions(pdf_path: str, password: str = None) -> tuple[list[dict], dict]:
     """Extract all transactions and statement summary from the PDF."""
+    if pdf_path.startswith("file://"):
+        import urllib.parse
+        pdf_path = pdf_path[7:]
+        if not pdf_path.startswith("/"):
+            pdf_path = "/" + pdf_path
+        pdf_path = urllib.parse.unquote(pdf_path)
+
     transactions = []
     summary = {}
 
@@ -67,7 +83,7 @@ def parse_transactions(pdf_path: str) -> tuple[list[dict], dict]:
 
     full_text = ""
 
-    with pdfplumber.open(pdf_path) as pdf:
+    with pdfplumber.open(pdf_path, password=password) as pdf:
         for page_num, page in enumerate(pdf.pages):
             text = page.extract_text() or ""
             full_text += "\n" + text
@@ -279,9 +295,10 @@ def build_excel(transactions: list[dict], summary: dict, out_path: str):
 # ── entry point ───────────────────────────────────────────────────────────────
 
 if __name__ == '__main__':
-    pdf_path = sys.argv[1] if len(sys.argv) > 1 else '/mnt/user-data/uploads/icici.pdf'
-    out_path  = sys.argv[2] if len(sys.argv) > 2 else 'icici_transactions.xlsx'
+    # Use command-line arguments if provided; otherwise, fall back to the configured paths above
+    pdf_path = sys.argv[1] if len(sys.argv) > 1 else PDF_PATH
+    out_path  = sys.argv[2] if len(sys.argv) > 2 else OUTPUT_EXCEL_PATH
 
     print(f"Parsing: {pdf_path}")
-    transactions, summary = parse_transactions(pdf_path)
+    transactions, summary = parse_transactions(pdf_path, password=PDF_PASSWORD)
     build_excel(transactions, summary, out_path)
